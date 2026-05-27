@@ -6,7 +6,17 @@ on:
     - cron: '0 * * * *'
     # 每天北京时间 23:30 执行一次日报推送 (北京时间 23:30 = UTC 时间 15:30)
     - cron: '30 15 * * *'
-  workflow_dispatch: # 允许手动在 GitHub 页面点击触发运行
+  workflow_dispatch:
+    # 允许手动在 GitHub 页面点击触发运行时选择模式，避免无谓消耗 Server酱 额度
+    inputs:
+      run_type:
+        description: '请选择运行类型 (monitor=仅监控不打扰, daily=强制发送日报)'
+        required: true
+        default: 'monitor'
+        type: choice
+        options:
+          - monitor
+          - daily
 
 jobs:
   monitor:
@@ -31,9 +41,11 @@ jobs:
         env:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
-          # 通过触发的 cron 表达式精确判断是每小时监控还是每日定时总结
-          if [ "${{ github.event.schedule }}" = "30 15 * * *" ]; then
-            echo "触发每日定时总结..."
+          # 满足以下任一条件时，触发发送日报：
+          # 1. 触发源是定时任务且表达式为每天 23:30 (15:30 UTC)
+          # 2. 手动触发时，用户在下拉菜单中选择了 'daily'
+          if [ "${{ github.event.schedule }}" = "30 15 * * *" ] || [ "${{ github.event.inputs.run_type }}" = "daily" ]; then
+            echo "触发总结日报推送..."
             python monitor.py --daily
           else
             echo "触发每小时折扣监控..."
