@@ -1,0 +1,49 @@
+name: The Bazaar Discount Monitor
+
+on:
+  schedule:
+    # 每一个小时执行一次价格监控 (UTC 时间整点，如 00:00, 01:00 = 北京时间 08:00, 09:00)
+    - cron: '0 * * * *'
+    # 每天北京时间 23:30 执行一次日报推送 (北京时间 23:30 = UTC 时间 15:30)
+    - cron: '30 15 * * *'
+  workflow_dispatch: # 允许手动在 GitHub 页面点击触发运行
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 允许提交代码回仓库以保存 discount_status.json 状态文件
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run monitor
+        env:
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          # 通过触发的 cron 表达式精确判断是每小时监控还是每日定时总结
+          if [ "${{ github.event.schedule }}" = "30 15 * * *" ]; then
+            echo "触发每日定时总结..."
+            python monitor.py --daily
+          else
+            echo "触发每小时折扣监控..."
+            python monitor.py
+          fi
+
+      - name: Commit and push changes to status file
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # 检查 discount_status.json 是否有变化，若有则提交保存
+          git add discount_status.json
+          git diff-index --quiet HEAD || (git commit -m "Auto-update discount status [skip ci]" && git push)
