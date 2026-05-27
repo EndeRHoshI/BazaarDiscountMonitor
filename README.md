@@ -8,7 +8,7 @@
 
 1. **价格获取 (Steam API)**：
    - 定时请求 Steam 官方公开 API 获取游戏 *The Bazaar* (AppID: `1617400`) 的详情。
-   - 动态解析游戏名下的所有 DLC 列表，自动发现未来新上架的 DLC，无需修改代码。
+   - 动态解析游戏名下所有的 DLC 列表，自动发现未来新上架的 DLC，无需修改代码。
 2. **折扣状态比对 (防止重复报警)**：
    - 脚本在本地（云端）维护一个 `discount_status.json` 文件记录上一次的打折情况。
    - 发现有新的 DLC 进入折扣或折扣幅度变大时，触发**即时报警**。
@@ -78,6 +78,44 @@
      {"ref": "main"}
      ```
 4. 点击底部的 **`Create`** 保存即可。
+
+---
+
+## 💡 深入拓展：cron-job.org 与 GitHub API 详解
+
+### 1. cron-job.org 原理与常见应用场景
+
+`cron-job.org` 是一个部署在云端的**高精度 HTTP 定时触发器（网络闹钟）**。它在设定时间点，向指定 URL 发起网络请求并接收状态反馈。
+
+**经典应用场景：**
+- **免费云托管防休眠 (保活)**：像 Render、Koyeb 等免费云服务器，若 15 分钟无人访问会自动休眠。可以使用它每 10 分钟请求一次网站，实现 **24小时永不休眠**。
+- **定时唤醒 Serverless 云函数**：Vercel、Cloudflare Workers 等无服务器平台没有后台常驻进程，可利用它定时发请求，触发云函数执行数据清理、备份等任务。
+- **极简网站存活监控**：每隔几分钟请求一次个人网站，如果网站挂了（返回 502/500 等），它会自动发送报警邮件。
+- **智能家居自动化 Webhook 触发**：定时请求 Home Assistant 的 Webhook 接口以实现智能设备的云端自动化开关。
+
+### 2. 关于 GitHub API 触发链接
+
+该链接是 GitHub 官方的 REST API 接口，用于远程触发工作流的运行：
+```text
+https://api.github.com/repos/EndeRHoshI/BazaarDiscountMonitor/actions/workflows/monitor.yml/dispatches
+```
+
+#### 问：能在浏览器地址栏直接打开这个链接吗？
+**答：不能。**
+1. **请求方法不匹配**：直接在浏览器地址栏输入并回车，浏览器发起的是 **`GET`** 请求。而 GitHub 的触发接口规定必须是 **`POST`** 请求。
+2. **缺少鉴权与必要参数**：该接口必须在 Headers 中携带您的密钥 Token，并且在 Body 中携带 `{"ref": "main"}` 参数说明要运行哪一个分支。浏览器地址栏无法设置这些内容。
+
+#### 💡 如何在本地电脑上手动触发该 API？
+如果您想在电脑上通过命令行直接触发，可以在终端中运行以下 `curl` 命令：
+
+```bash
+curl -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer 您的ghp_Token" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  https://api.github.com/repos/EndeRHoshI/BazaarDiscountMonitor/actions/workflows/monitor.yml/dispatches \
+  -d '{"ref":"main"}'
+```
 
 ---
 
