@@ -6,8 +6,8 @@ from datetime import datetime
 
 # 配置区域
 # 个人微信推送 (Server酱 方案)
-# 如果有多个人要接收，可以用英文逗号分隔填入多个 SendKey，例如 "KEY1,KEY2"
-SERVERCHAN_SENDKEYS = [x.strip() for x in os.environ.get("SERVERCHAN_SENDKEY", "SCT355371T08evHGiLp4yR6qFvpgro2qzO").split(",") if x.strip()]
+raw_keys = os.environ.get("SERVERCHAN_SENDKEY", "").strip() or "SCT355371T08evHGiLp4yR6qFvpgro2qzO"
+SERVERCHAN_SENDKEYS = [x.strip() for x in raw_keys.split(",") if x.strip()]
 
 # Steam 游戏配置 (The Bazaar)
 GAME_APP_ID = 1617400
