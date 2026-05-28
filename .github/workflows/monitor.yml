@@ -1,13 +1,8 @@
 name: The Bazaar Discount Monitor
 
 on:
-  schedule:
-    # 避开整点高峰期，在每小时的第 12 分钟执行价格监控 (北京时间每小时的第 12 分钟)
-    - cron: '12 * * * *'
-    # 每天北京时间 23:30 执行一次日报推送 (北京时间 23:30 = UTC 时间 15:30)
-    - cron: '30 15 * * *'
   workflow_dispatch:
-    # 允许手动在 GitHub 页面点击触发运行时选择模式，避免无谓消耗 Server酱 额度
+    # 允许手动或通过外部接口（cron-job.org）触发时选择模式
     inputs:
       run_type:
         description: '请选择运行类型 (monitor=仅监控不打扰, daily=强制发送日报)'
@@ -41,10 +36,8 @@ jobs:
         env:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
-          # 满足以下任一条件时，触发发送日报：
-          # 1. 触发源是定时任务且表达式为每天 23:30 (15:30 UTC)
-          # 2. 手动触发时，用户在下拉菜单中选择了 'daily'
-          if [ "${{ github.event.schedule }}" = "30 15 * * *" ] || [ "${{ github.event.inputs.run_type }}" = "daily" ]; then
+          # 外部触发时，根据传入的 run_type 参数决定是否发送日报
+          if [ "${{ github.event.inputs.run_type }}" = "daily" ]; then
             echo "触发总结日报推送..."
             python monitor.py --daily
           else

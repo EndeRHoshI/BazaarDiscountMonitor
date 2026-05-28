@@ -14,8 +14,8 @@
    - 发现有新的 DLC 进入折扣或折扣幅度变大时，触发**即时报警**。
    - 运行结束后，GitHub Actions 会自动通过 Bot 账户将更新后的 `discount_status.json` **提交并推回仓库**保存，确保下一次运行状态的连续性。
 3. **外部精准触发 (cron-job.org)**：
-   - **为什么切换到外部触发？**：GitHub 官方的定时器（Actions Schedule）存在严重的排队拥堵，往往会延迟半小时甚至一小时触发，甚至在刚创建新仓库时会有几小时的“冷启动”不触发期。
-   - **触发原理**：使用完全免费的外部定时器 `cron-job.org`，通过 GitHub REST API 远程手动触发（`workflow_dispatch`）我们的工作流，从而实现**秒级精度**的定时监控。
+   - **为什么放弃 GitHub 官方定时器（Actions Schedule）？**：GitHub 官方的定时器存在严重的排队拥堵。例如本应在 **23:30** 执行的日报，因队列严重延迟，经常会被拖延到次日凌晨 **02:09** 左右才被执行。
+   - **双定时器触发原理**：我们将 GitHub 内置的 `schedule` 彻底关闭，改为在 `cron-job.org` 上配置 **两个** 高精度的定时任务，通过 API 分别触发“每小时折扣扫描”与“23:30 定时日报”，实现 0 延迟准点运行。
 4. **消息推送 (Server酱)**：
    - 触发折扣或每日总结时，调用 Server酱 接口，通过微信公众号“方糖”将打折信息直接以服务号卡片的形式推送至关注者的微信上。
 
@@ -23,8 +23,8 @@
 
 ## ⏰ 运行规则
 
-- **即时折扣监控**：每小时第 12 分钟运行。若无新增折扣，保持静默，**不浪费 Server酱 免费额度**；若有新增折扣，微信即时报警。
-- **每日总结日报**：每天北京时间晚上 **23:30** 定时运行。无论是否打折，都会将所有 DLC 的当前最新价格以列表形式发送到微信。
+- **即时折扣监控**：由 `cron-job.org` 触发，每小时第 12 分钟运行。若无新增折扣，保持静默，**不浪费 Server酱 免费额度**；若有新增折扣，微信即时报警。
+- **每日总结日报**：由 `cron-job.org` 触发，每天北京时间晚上 **23:30** 准点运行。无论是否打折，都会将所有 DLC 的当前最新价格以列表形式发送到微信。
 
 ---
 
@@ -45,7 +45,9 @@
    - **Value**: 填入您的 `SendKey`（多个人接收可以用英文逗号隔开，例如 `KEY1,KEY2`）。
 5. 保存即可。
 
-### 3. 配置 cron-job.org 外部定时器（解决 GitHub 定时延迟/不触发）
+### 3. 配置 cron-job.org 外部定时器（实现 0 延迟精准触发）
+
+为了实现静默监控和准点日报，您需要在 `cron-job.org` 配置 **两个不同的定时任务**：
 
 #### 第一步：生成 GitHub 个人访问令牌 (Token)
 我们需要给外部定时器授予触发 GitHub 工作流的权限：
@@ -55,13 +57,13 @@
 4. 点击 **`Generate new token (classic)`**，**`Note`** 填入 `cron-trigger`，勾选 **`workflow`** 权限。
 5. 点击最下方生成按钮，**复制生成的 `ghp_xxxx` 开头的 Token**（页面关闭后将无法查看，请妥善保存）。
 
-#### 第二步：在 cron-job.org 配置触发任务
+#### 第二步：配置任务 1（每小时折扣监控，无折扣不发微信）
 1. 打开并注册 [cron-job.org](https://cron-job.org/)（完全免费）。
 2. 点击 **`Create Cronjob`**：
-   - **Title**: `Bazaar Monitor`
+   - **Title**: `Bazaar Hourly Monitor`
    - **URL**: `https://api.github.com/repos/EndeRHoshI/BazaarDiscountMonitor/actions/workflows/monitor.yml/dispatches`
    - **Request method**: 选择 **`POST`**。
-   - **Schedule**: 选择 `Every hour`（每小时）或自定义具体分钟（如每小时第 12 分钟）。
+   - **Schedule**: 选择 `Every hour` 且分钟选择每小时的第 `12` 分钟（如 `12 * * * *`）。
 3. 切换到 **`ADVANCED`** 选项卡：
    - 关闭 **`Requires HTTP authentication`** 开关（置灰状态）。
    - 在 **`Headers`** 区域，点击 **`+ ADD`** 依次添加以下 4 个 Header：
@@ -73,11 +75,31 @@
      | `User-Agent` | `cron-job-trigger` |
      | `Content-Type` | `application/json` |
 
-   - 在 **`Request body`** 文本框中，输入：
+   - 在 **`Request body`** 文本框中，输入以下 JSON（将以 `monitor` 默认运行，无折扣则保持静默）：
      ```json
      {"ref": "main"}
      ```
-4. 点击底部的 **`Create`** 保存即可。
+4. 保存即可。
+
+#### 第三步：配置任务 2（每天 23:30 定时日报，每天固定发一次）
+1. 在 `cron-job.org` 点击 **`Create Cronjob`**：
+   - **Title**: `Bazaar Daily Report`
+   - **URL**: `https://api.github.com/repos/EndeRHoshI/BazaarDiscountMonitor/actions/workflows/monitor.yml/dispatches`
+   - **Request method**: 选择 **`POST`**。
+   - **Schedule**: 选择 `Days of week`，在 **`User defined`** 下选择时间为每天的 **`23:30`** (时区选择 `Asia/Shanghai`)。
+2. 同样切换到 **`ADVANCED`** 选项卡：
+   - 关闭 **`Requires HTTP authentication`**。
+   - 同样点击 **`+ ADD`** 填入与任务 1 **完全相同** 的 4 个 Headers。
+   - 在 **`Request body`** 文本框中，输入以下 JSON（**关键：指定 `run_type` 为 `daily`**）：
+     ```json
+     {
+       "ref": "main",
+       "inputs": {
+         "run_type": "daily"
+       }
+     }
+     ```
+3. 保存即可。
 
 ---
 
