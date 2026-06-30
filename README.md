@@ -141,6 +141,32 @@ curl -X POST \
 
 ---
 
+## ⏸️ 停止服务
+
+如果需要暂时或永久停止监控服务，需要执行以下两个步骤：
+
+### 第一步：停止 cron-job.org 定时任务
+1. 登录 [cron-job.org](https://cron-job.org/)
+2. 找到并**暂停**（Pause）或**删除**（Delete）以下两个任务：
+   - `Bazaar Hourly Monitor`（每小时折扣监控）
+   - `Bazaar Daily Report`（每日日报）
+
+### 第二步：禁用 GitHub Actions 工作流（可选）
+为防止误触发，可以禁用仓库的 Actions：
+1. 进入 GitHub 仓库页面 → **Settings** → 左侧 **Actions** → **General**
+2. 选择 **Disable actions** 并保存
+
+或者直接删除 workflow 文件：
+```bash
+# 删除后本地提交推送
+rm .github/workflows/monitor.yml
+git add .
+git commit -m "禁用折扣监控服务"
+git push
+```
+
+---
+
 ## 💻 本地调试与手动运行
 
 如果您想在本地运行或者手动在云端测试：
